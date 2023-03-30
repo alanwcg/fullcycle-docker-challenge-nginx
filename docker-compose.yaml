@@ -1,0 +1,51 @@
+version: '3'
+
+services:
+
+  db:
+    image: mysql
+    container_name: db
+    restart: always
+    tty: true
+    command: --innodb-use-native-aio=0
+    volumes:
+      - ./sql:/docker-entrypoint-initdb.d
+      - ./mysql:/var/lib/mysql
+    environment:
+      - MYSQL_DATABASE=nodedb
+      - MYSQL_ROOT_PASSWORD=root
+    networks:
+      - node-network
+
+  nginx:
+    build:
+      context: ./nginx
+    container_name: nginx
+    restart: always
+    tty: true
+    networks:
+      - node-network
+    ports:
+      - "8080:80"
+
+  app:
+    build:
+      context: ./node
+    container_name: app
+    entrypoint: wait-for db:3306 -t 40 -- docker-entrypoint.sh
+    command: bash -c "yarn && node src/index.js"
+    tty: true
+    networks:
+      - node-network
+    volumes:
+      - ./node/package.json:/home/node/app/package.json
+      - ./node/src/:/home/node/app/src/
+    expose:
+      - "3000"
+    depends_on:
+      - db
+      - nginx
+
+networks:
+  node-network:
+    driver: bridge
